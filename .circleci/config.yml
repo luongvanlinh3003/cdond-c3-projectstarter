@@ -208,12 +208,12 @@ jobs:
             aws ec2 describe-instances \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --filters "Name=tag:project,Values=udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-              --output text >> inventory
-            cat inventory
+              --output text >> inventory.txt
+            cat inventory.txt
       - persist_to_workspace:
           root: .
           paths:
-            - .circleci/ansible/inventory
+            - .circleci/ansible/inventory.txt
       - destroy_environment:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
@@ -227,6 +227,21 @@ jobs:
       - attach_workspace:
           at: .
       - run:
+          name: config env
+          command: |
+            # add environment variables to server
+            echo ENVIRONMENT=production > backend/.env
+            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> backend/.env
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> backend/.env
+            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> backend/.env
+            echo TYPEORM_HOST=$TYPEORM_HOST >> backend/.env
+            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> backend/.env
+            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> backend/.env
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> backend/.env
+            echo TYPEORM_PORT=$TYPEORM_PORT >> backend/.env
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> backend/.env
+            cat backend/.env
+      - run:
           name: Install dependencies
           working_directory: ./.circleci/ansible
           command: |
@@ -238,8 +253,11 @@ jobs:
           command: |
             pwd &&
             ls -la
-            cat inventory
-            ansible-playbook -i inventory configure-server.yml
+            ansible-playbook -i inventory.txt configure-server.yml
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/backend
       - destroy_environment:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
@@ -328,8 +346,8 @@ jobs:
           name: Deploy backend
           working_directory: ./.circleci/ansible
           command: |
-            cat inventory
-            ansible-playbook -i inventory deploy-backend.yml
+            cat inventory.txt
+            ansible-playbook -i inventory.txt deploy-backend.yml
       - destroy_environment:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
@@ -345,13 +363,10 @@ jobs:
   #         at: .
   #     - run:
   #         name: Install dependencies
-  #         working_directory: /tmp
   #         command: |
-  #           apk add --update curl nodejs npm
-  #           pip install awscli
+  #           apk add --update --no-cache curl aws-cli nodejs npm
   #     - run:
   #         name: Backend smoke test.
-  #         working_directory: ./backend
   #         command: |
   #           BACKEND_IP=$(aws ec2 describe-instances \
   #             --query 'Reservations[*].Instances[*].PublicIpAddress' \
@@ -359,22 +374,21 @@ jobs:
   #             --output text)
   #           export API="http://${BACKEND_IP}:3030"
   #           echo "${API}"
-  #           if curl "${API}/api/status" | grep "ok"
+  #           if curl -s "${API}/api/status" | grep "ok"
   #           then
-  #             exit 0
+  #             return 0
   #           else
-  #             exit 1
+  #             return 1
   #           fi
   #     - run:
   #         name: Frontend smoke test.
-  #         working_directory: ./backend
   #         command: |
   #           URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website.us-east-1.amazonaws.com/index.html"
   #           if curl -s ${URL} | grep -q "Welcome"
   #           then
-  #             exit 1
+  #             return 1
   #           else
-  #             exit 1
+  #             return 1
   #           fi
   #     - destroy_environment:
   #         id: ${CIRCLE_WORKFLOW_ID:0:7}
@@ -408,7 +422,7 @@ jobs:
   #         command: |
   #           aws cloudformation deploy \
   #             --template-file cloudfront.yml \
-  #             --stack-name udapeople-cloudfront-production \
+  #             --stack-name InitialStack \
   #             --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
   #             --tags project=udapeople
   #     - revert_migrations:
