@@ -356,98 +356,110 @@ jobs:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
 
-  # smoke-test:
-  #   executor: python
-  #   steps:
-  #     - checkout
-  #     - attach_workspace:
-  #         at: .
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           apk add --update --no-cache curl aws-cli nodejs npm
-  #     - run:
-  #         name: Backend smoke test.
-  #         command: |
-  #           BACKEND_IP=$(aws ec2 describe-instances \
-  #             --query 'Reservations[*].Instances[*].PublicIpAddress' \
-  #             --filters "Name=tag:project,Values=udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-  #             --output text)
-  #           export API="http://${BACKEND_IP}:3030"
-  #           echo "${API}"
-  #           if curl "${API}/api/status" | grep "ok"
-  #           then
-  #             exit 0
-  #           else
-  #             exit 1
-  #           fi
-  #     - run:
-  #         name: Frontend smoke test.
-  #         command: |
-  #           URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website.us-east-1.amazonaws.com/index.html"
-  #           if curl -s ${URL} | grep -q "Welcome"
-  #           then
-  #             return 1
-  #           else
-  #             return 1
-  #           fi
-  #     - destroy_environment:
-  #         id: ${CIRCLE_WORKFLOW_ID:0:7}
-  #         when: on_fail
-  #     - revert_migrations:
-  #         id: ${CIRCLE_WORKFLOW_ID:0:7}
-  #         when: on_fail
+  smoke-test:
+    executor: python
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update --no-cache curl aws-cli nodejs npm
+      - run:
+          name: Backend smoke test.
+          command: |
+            BACKEND_IP=$(aws ec2 describe-instances \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --filters "Name=tag:project,Values=udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --output text)
+            export API="http://${BACKEND_IP}:3030"
+            echo "${API}"
+            if curl "${API}/api/status" | grep "ok"
+            then
+              exit 0
+            else
+              exit 1
+            fi
+      - run:
+          name: Frontend smoke test.
+          command: |
+            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website.us-east-1.amazonaws.com/index.html"
+            if curl -s ${URL} | grep -q "Welcome"
+            then
+              return 1
+            else
+              return 1
+            fi
+      - destroy_environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
+          when: on_fail
+      - revert_migrations:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
+          when: on_fail
 
-  # cloudfront-update:
-  #   executor: aws
-  #   steps:
-  #     - checkout
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           yum install -y tar gzip curl
-  #           curl -sL https://rpm.nodesource.com/setup_10.x | bash -
-  #           yum install -y nodejs
-  #     - run:
-  #         name: Store old WorkflowID in memstash for cleanup phase
-  #         working_directory: ./.circleci/files
-  #         command: |
-  #           aws cloudformation \
-  #             list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
-  #             --no-paginate --output text >> old_workflow_id.txt
-  #           cat old_workflow_id.txt
+  cloudfront-update:
+    executor: aws
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum install -y tar gzip curl
+            curl -sL https://rpm.nodesource.com/setup_10.x | bash -
+            yum install -y nodejs
+      - run:
+          name: Store old WorkflowID in memstash for cleanup phase
+          working_directory: ./.circleci/files
+          command: |
+            aws cloudformation \
+              list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+              --no-paginate --output text >> old_workflow_id.txt
+            cat old_workflow_id.txt
 
-  #     - run:
-  #         name: Update cloudfront distribution
-  #         working_directory: ./.circleci/files
-  #         command: |
-  #           aws cloudformation deploy \
-  #             --template-file cloudfront.yml \
-  #             --stack-name InitialStack \
-  #             --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
-  #             --tags project=udapeople
-  #     - revert_migrations:
-  #         id: ${CIRCLE_WORKFLOW_ID:0:7}
-  #         when: on_fail
+      - run:
+          name: Update cloudfront distribution
+          working_directory: ./.circleci/files
+          command: |
+            aws cloudformation deploy \
+              --template-file cloudfront.yml \
+              --stack-name InitialStack \
+              --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
+              --tags project=udapeople
+      - revert_migrations:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
+          when: on_fail
 
-# cleanup:
-#   docker:
-#     # Docker image here
-#   steps:
-#     # Checkout code from git
-#     - run:
-#         name: Get old stack workflow id
-#         command: |
-#           # your code here
-#           export OldWorkflowID="the id here"
-#           export STACKS=[] #put the list of stacks here
-#     - run:
-#         name: Remove old stacks and files
-#         command: |
-#           if [[ "${STACKS[@]}" =~ "${OldWorkflowID}" ]]
-#           then
-#             # your code here
-#           fi
+  cleanup:
+    executor: aws
+    steps:
+      - checkout
+      - run:
+          name: Clean up old environment
+          working_directory: ./.circleci/files
+          command: |
+            export OldWorkflowID=$(aws cloudformation \
+            list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+            --no-paginate --output text)
+            echo OldWorkflowID: "${OldWorkflowID}"
+            echo CIRCLE_WORKFLOW_ID "${CIRCLE_WORKFLOW_ID:0:5}"
+            # Fetch the stack names          
+            export STACKS=($(aws cloudformation list-stacks --query "StackSummaries[*].StackName" \
+            --stack-status-filter CREATE_COMPLETE --no-paginate --output text)) 
+            echo Stack names: "${STACKS[@]}" 
+
+            if [[ "${CIRCLE_WORKFLOW_ID:0:5}" != "$OldWorkflowID" ]]
+            then
+              echo "$OldWorkflowID!=${CIRCLE_WORKFLOW_ID:0:5} => will delete old version"
+
+              aws s3 rm "s3://udapeople-${OldWorkflowID}" --recursive
+              aws cloudformation delete-stack --stack-name "udapeople-frontend-${OldWorkflowID}"
+              aws cloudformation delete-stack --stack-name "udapeople-backend-${OldWorkflowID}"
+            else
+              echo "$OldWorkflowID==${CIRCLE_WORKFLOW_ID:0:5} => nothing needs to be done..."
+            fi
+          environment:
+            TERM: xterm-256color
 
 workflows:
   default:
@@ -499,12 +511,12 @@ workflows:
       - deploy-frontend:
           requires:
             - run-migrations
-      # - smoke-test:
-      #     requires:
-      #       - deploy-backend
-      #       - deploy-frontend
-      # - cloudfront-update:
-      #     requires:
-      #       - smoke-test
-      # - cleanup:
-      #     requires: [cloudfront-update]
+      - smoke-test:
+          requires:
+            - deploy-backend
+            - deploy-frontend
+      - cloudfront-update:
+          requires:
+            - smoke-test
+      - cleanup:
+          requires: [cloudfront-update]
