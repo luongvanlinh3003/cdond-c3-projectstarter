@@ -208,12 +208,12 @@ jobs:
             aws ec2 describe-instances \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --filters "Name=tag:project,Values=udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-              --output text >> inventory.txt
-            cat inventory.txt
+              --output text >> inventory
+            cat inventory
       - persist_to_workspace:
           root: .
           paths:
-            - .circleci/ansible/inventory.txt
+            - .circleci/ansible/inventory
       - destroy_environment:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
@@ -253,7 +253,8 @@ jobs:
           command: |
             pwd &&
             ls -la
-            ansible-playbook -i inventory.txt configure-server.yml
+            cat inventory
+            ansible-playbook -i inventory configure-server.yml -vvv
       - persist_to_workspace:
           root: ~/
           paths:
@@ -346,8 +347,8 @@ jobs:
           name: Deploy backend
           working_directory: ./.circleci/ansible
           command: |
-            cat inventory.txt
-            ansible-playbook -i inventory.txt deploy-backend.yml
+            cat inventory
+            ansible-playbook -i inventory deploy-backend.yml
       - destroy_environment:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
@@ -374,11 +375,11 @@ jobs:
   #             --output text)
   #           export API="http://${BACKEND_IP}:3030"
   #           echo "${API}"
-  #           if curl -s "${API}/api/status" | grep "ok"
+  #           if curl "${API}/api/status" | grep "ok"
   #           then
-  #             return 0
+  #             exit 0
   #           else
-  #             return 1
+  #             exit 1
   #           fi
   #     - run:
   #         name: Frontend smoke test.
